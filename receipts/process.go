@@ -5,10 +5,12 @@ import (
 	//"encoding/json"
 	"io/ioutil"
 	"log"
+	"os"
 )
 
 func main() {
 	fmt.Println("First Go Program")
+	fmt.Println(os.Args[1])
 	// take in a json receipt
 	content, err := ioutil.ReadFile("./examples/simple-receipt.json")
 	if err != nil {
