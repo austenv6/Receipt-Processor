@@ -102,11 +102,8 @@ func main() {
 	}
 
 	fmt.Println("count with trim/3", pointCount)
-
 	// 6 pts if day in purchase date is odd
-	fmt.Println("purchase date: ", payload.PurchaseDate)
-	fmt.Println("purchase time: ", payload.PurchaseTime)
-	date, err := time.Parse("2006-01-02", payload.PurchaseDate)
+	date, err := time.Parse("2006-01-02 15:04", payload.PurchaseDate + " " + payload.PurchaseTime)
 	if err != nil {
 		log.Fatal("Error converting string to date")
 		os.Exit(1)
@@ -118,7 +115,14 @@ func main() {
 
 	fmt.Println("count with date is odd: ", pointCount)
 
-	//
+	// if time of purchase is between 2pm and 4pm (201 to 359)
+	fmt.Println("purchase time: ", payload.PurchaseTime)
+	fmt.Println("hour: ", date.Hour())
+	if (date.Hour() >= 14 && date.Hour() < 16) {
+		pointCount += 10
+	}
+
+	fmt.Println("count with time range: ", pointCount)
 
 	// return a json object with code generated id and points
 }
