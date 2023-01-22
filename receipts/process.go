@@ -1,3 +1,4 @@
+// package to process json receipts and handle get and post requests
 package main
 
 import (
@@ -10,15 +11,16 @@ import (
 	"math"
 	"strings"
 	"time"
-	//"os/exec"
 	"github.com/google/uuid"
 )
 
+// struct for items inside Receipt struct
 type Item struct {
 	ShortDescription string 
 	Price string 
 }
 
+// struct to store incoming json objects
 type Receipt struct {
 	Retailer string 
 	PurchaseDate string 
@@ -27,39 +29,34 @@ type Receipt struct {
 	Items []Item 
 }
 
+// Points struct to output to json file after points calculated
 type Points struct {
 	Points string `json:"points"` // add field tag to get lowercase "points"
 }
 
-//go run process.go ./examples/simple-receipt.json
+// UUID struct to eventually output UUID in json format
+type UUID struct {
+	UUID string `json:"id"`
+}
+
+//go run process.go post ./examples/simple-receipt.json
+//go run process.go get <UUID>
 //go get github.com/google/uuid
-func main() {
-	if (len(os.Args) != 2) {
-		fmt.Println("Usage: go run process.go <relative path.json>")
-		os.Exit(1)
-	}
-	fmt.Println(os.Args[1])
+
+// POST handler function
+func PerformPost() {
 	// take in a json receipt
-	receiptFile, err := ioutil.ReadFile(os.Args[1]);
+	receiptFile, err := ioutil.ReadFile(os.Args[2]);
 	if err != nil {
 		log.Fatal("Error when opening file: ", err)
-		os.Exit(1)
+		return
 	} 
 
 	var payload Receipt
 	err = json.Unmarshal(receiptFile, &payload)
 	if err != nil {
 		log.Fatal("Error parsing json", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("retailer: ", payload.Retailer)
-	fmt.Println("purchase date: ", payload.PurchaseDate)
-	fmt.Println("purchase time: ", payload.PurchaseTime)
-	fmt.Println("total: ", payload.Total)
-	for i := 0; i < len(payload.Items); i++ {
-		fmt.Println("short description: ", payload.Items[i].ShortDescription)
-		fmt.Println("price: ", payload.Items[i].Price)
+		return
 	}
 
 	// count alphanumeric characters in retailer name
@@ -70,31 +67,22 @@ func main() {
 		}
 	}
 
-	fmt.Println("count for retailer: ", pointCount)
-
 	// give fifty points if total is dollar amt with no cents
 	floatTotal, err := strconv.ParseFloat(payload.Total, 64)
 	if err != nil {
 		log.Fatal("Error converting total to float", err)
 	}
-	fmt.Println(math.Mod(floatTotal,10))
 	if (math.Trunc(floatTotal) == floatTotal) {
 		pointCount += 50;
 	}
-
-	fmt.Println("count for total + retailer: ", pointCount)
 
 	// give 25 pts if total is a multiple of .25
 	if (math.Mod(floatTotal,.25) == 0) {
 		pointCount +=25
 	}
 
-	fmt.Println("count for total + retailer + .25: ", pointCount)
-
 	// 5 pts for every two items on the receipt
 	pointCount += ((len(payload.Items)/2) * 5)
-
-	fmt.Println("count with num items: ", pointCount)
 
 	// if trimmed len of item descrip is mult 3, multiply by .2 and round up to nearest int
 	for i := 0; i < len(payload.Items); i++ {
@@ -110,51 +98,93 @@ func main() {
 		}
 	}
 
-	fmt.Println("count with trim/3", pointCount)
 	// 6 pts if day in purchase date is odd
 	date, err := time.Parse("2006-01-02 15:04", payload.PurchaseDate + " " + payload.PurchaseTime)
 	if err != nil {
 		log.Fatal("Error converting string to date")
-		os.Exit(1)
+		return
 	}
 
 	if date.Day() % 2 != 0 {
 		pointCount += 6
 	}
 
-	fmt.Println("count with date is odd: ", pointCount)
-
 	// if time of purchase is between 2pm and 4pm (200 to 359)
-	fmt.Println("purchase time: ", payload.PurchaseTime)
-	fmt.Println("hour: ", date.Hour())
 	if (date.Hour() >= 14 && date.Hour() < 16) {
 		pointCount += 10
 	}
 
-	fmt.Println("count with time range: ", pointCount)
-
 	newUUID := (uuid.New()).String()
-	fmt.Println("UUID: ", newUUID)
-
+	
 	// create points object and convert int to string
-	pointsOut := Points{strconv.Itoa(pointCount)} 
+	pointsOut := &Points{
+		Points: strconv.Itoa(pointCount),
+	} 
+	// Marshal pointsOut to json object
 	output, err := json.Marshal(pointsOut)
 	if err != nil {
 		log.Fatal("Error creating JSON output object")
-		os.Exit(1)
+		return
 	}
-	fmt.Println(string(output))
-
+	// create UUID object
+	uuidObj := &UUID{
+		UUID: newUUID,
+	}
+	// Marshal uuidObj to json object
+	uuidOutput, err := json.Marshal(uuidObj)
+	if err != nil {
+		log.Fatal("Error creating JSON UUID object")
+		return
+	}
+	// create UUID directory
 	err = os.Mkdir(newUUID, 0777)
 	if err != nil {
 		log.Fatal("Error creating UUID directory")
-		os.Exit(1)
+		return
 	}
-	err = ioutil.WriteFile(newUUID + "/points", output, 0644)
+	// create points file under UUID directory
+	err = ioutil.WriteFile(newUUID + "/points.json", output, 0644)
 	if err != nil {
 		log.Fatal("Error creating points file")
-		os.Exit(1)
+		return
 	}
-	fmt.Println("success")
+	// output UUID so user can grab it for get requests
+	fmt.Println(string(uuidOutput))
+	return
+}
 
+// get request handler
+func PerformGet() {
+	// grab the UUID passed in through command line and use it to try to locate corresponding points file
+	checkUUID := strings.ToLower(os.Args[2])
+	pointsFile, err := ioutil.ReadFile("./" + checkUUID + "/points.json")
+	if err != nil {
+		log.Fatal("Error when opening points file: ", err)
+		return
+	} 
+	// unmarshal the points file
+	var payload Points
+	err = json.Unmarshal(pointsFile, &payload)
+	if err != nil {
+		log.Fatal("Error parsing json points file", err)
+		return
+	}
+	// print points to console in json format
+	fmt.Println(string(pointsFile))
+	return
+}
+
+func main() {
+	// verify correct number of args passed in
+	if (len(os.Args) != 3) {
+		fmt.Println("Usage: \nPost: go run process.go <relative path.json> \nGet: go run process.go get <UUID>")
+		return
+	}
+	// determine what kind of request was made and call corresponding handler
+	requestType := strings.ToUpper(os.Args[1])
+	if requestType == "POST" {
+		PerformPost()
+	} else if requestType == "GET" {
+		PerformGet()
+	}
 }
