@@ -10,6 +10,8 @@ import (
 	"math"
 	"strings"
 	"time"
+	//"os/exec"
+	"github.com/google/uuid"
 )
 
 type Item struct {
@@ -24,6 +26,13 @@ type Receipt struct {
 	Total string 
 	Items []Item 
 }
+
+type Points struct {
+	Points string `json:"points"` // add field tag to get lowercase "points"
+}
+
+//go run process.go ./examples/simple-receipt.json
+//go get github.com/google/uuid
 func main() {
 	if (len(os.Args) != 2) {
 		fmt.Println("Usage: go run process.go <relative path.json>")
@@ -115,7 +124,7 @@ func main() {
 
 	fmt.Println("count with date is odd: ", pointCount)
 
-	// if time of purchase is between 2pm and 4pm (201 to 359)
+	// if time of purchase is between 2pm and 4pm (200 to 359)
 	fmt.Println("purchase time: ", payload.PurchaseTime)
 	fmt.Println("hour: ", date.Hour())
 	if (date.Hour() >= 14 && date.Hour() < 16) {
@@ -124,5 +133,28 @@ func main() {
 
 	fmt.Println("count with time range: ", pointCount)
 
-	// return a json object with code generated id and points
+	newUUID := (uuid.New()).String()
+	fmt.Println("UUID: ", newUUID)
+
+	// create points object and convert int to string
+	pointsOut := Points{strconv.Itoa(pointCount)} 
+	output, err := json.Marshal(pointsOut)
+	if err != nil {
+		log.Fatal("Error creating JSON output object")
+		os.Exit(1)
+	}
+	fmt.Println(string(output))
+
+	err = os.Mkdir(newUUID, 0777)
+	if err != nil {
+		log.Fatal("Error creating UUID directory")
+		os.Exit(1)
+	}
+	err = ioutil.WriteFile(newUUID + "/points", output, 0644)
+	if err != nil {
+		log.Fatal("Error creating points file")
+		os.Exit(1)
+	}
+	fmt.Println("success")
+
 }
